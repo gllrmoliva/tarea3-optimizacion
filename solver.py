@@ -1,13 +1,37 @@
 import gurobipy as gp
 from gurobipy import GRB
 from utils import get_instances_txt, parse_fjsp_instance, save_fjsp_result
+import os
+from pathlib import Path
 
-def solve_fjsp(instance, time_limit=3600, mip_gap=0.0):
+def create_env():
+    """
+    Decide si utilizar licencia WLS o licencia local. Se hizo así debido a que
+    uno de los integrantes tiene solo ordenador de escritorio.
+    """
+    # Si existen variables WLS, usar WLS; si no, usar licencia local
+    if all(v in os.environ for v in ['GRB_WLSACCESSID', 'GRB_WLSSECRET', 'GRB_LICENSEID']):
+        print("Se ha seleccionado la licencia WLS")
+        env = gp.Env(empty=True)
+        env.setParam('WLSAccessID', os.environ['GRB_WLSACCESSID'])
+        env.setParam('WLSSecret', os.environ['GRB_WLSSECRET'])
+        env.setParam('LicenseID', int(os.environ['GRB_LICENSEID']))
+        env.start()
+        return env
+    else:
+        # usa la licencia local (offline)
+        print("Se ha seleccionado la licencia OFFLINE")
+        return gp.Env()
+
+
+def solve_fjsp(instance, env, time_limit=3600, mip_gap=0.0):
     """
     Resuelve el Flexible Job Shop Scheduling Problem (FJSP) usando Gurobi.
     """
 
+
     name = instance["name"]
+    save_path = str(Path.cwd() / "models" / str(name + ".lp"))
     n_jobs = instance["n_jobs"]
     n_machines = instance["n_machines"]
     jobs = instance["jobs"]
@@ -15,7 +39,7 @@ def solve_fjsp(instance, time_limit=3600, mip_gap=0.0):
     # Big-M: suma de los mayores tiempos posibles (cota superior trivial para horizon)
     L = sum(max(p for (_, p) in op) for job in jobs for op in job) * n_jobs + 1
 
-    model = gp.Model(name)
+    model = gp.Model(env=env)
     model.Params.OutputFlag = 1
     model.Params.TimeLimit = time_limit
     model.Params.MIPGap = mip_gap
@@ -90,6 +114,7 @@ def solve_fjsp(instance, time_limit=3600, mip_gap=0.0):
     model.setObjective(Cmax, GRB.MINIMIZE)
 
     # Optimizar
+    print("Iniciando optimización...")
     model.optimize()
 
     # Preparar estadísticas básicas
@@ -131,6 +156,9 @@ def solve_fjsp(instance, time_limit=3600, mip_gap=0.0):
         except Exception:
             stats["gap"] = None
 
+    model.write(save_path)
+    print(f"El modelo se ha guardado correctamente en {save_path}")
+
     return {
         "name"       : name,
         "n_jobs"     : n_jobs,
@@ -148,10 +176,12 @@ if __name__ == "__main__":
     for instance_str in instances_str:
         instances.append(parse_fjsp_instance(instance_str[1], instance_str[0]))
 
-    
+    env = create_env()
+
     for instance in instances:
         # 5 segundos de time limit para probar nomas 
         result = solve_fjsp(instance = instance,
+                            env = env,
                             time_limit=5,
                             mip_gap=0.0)
 

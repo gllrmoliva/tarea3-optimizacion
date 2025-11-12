@@ -63,7 +63,7 @@
     "stats": {
         "n_vars": 140,
         "n_constraints": 197,
-        "runtime": 0.08299994468688965,
+        "runtime": 0.07999992370605469,
         "status": 2,
         "obj_value": 468.0,
         "gap": 0.0
