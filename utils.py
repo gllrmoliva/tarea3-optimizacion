@@ -1,5 +1,8 @@
 from pathlib import Path
 from pprint import pprint
+import json
+import os
+from datetime import datetime
 
 def get_instances_txt(path_str: str):
     # obtener carpeta con instancias
@@ -9,10 +12,10 @@ def get_instances_txt(path_str: str):
     # obtener instancias desde archivos .txt
     # TODO: deberia guardar el nombre del archivo del que se obtiene instancia
 
-    instances = [file.read_text(encoding="utf-8") for file in intances_folder.glob("*.txt")]
+    instances = [(file.stem, file.read_text(encoding="utf-8")) for file in intances_folder.glob("*.txt")]
     return instances
 
-def parse_fjsp_instance(instance_str: str):
+def parse_fjsp_instance(instance_str: str, name_str):
     """
     Return:
     diccionario con n_jobs, n_machines,jobs
@@ -52,13 +55,28 @@ def parse_fjsp_instance(instance_str: str):
         jobs.append(job_data)
     
     return {
-        "n_jobs": n_jobs,
-        "n_machines": n_machines,
-        "jobs": jobs
+            "name"      : name_str,
+            "n_jobs"    : n_jobs,
+            "n_machines": n_machines,
+            "jobs"      : jobs
     }
 
-def save_answer(path_str: str):
-    pass
+
+def save_fjsp_result(result, folder="results"):
+
+    # crear carpeta si no existe
+    os.makedirs(folder, exist_ok=True)
+
+    # Nombre del archivo con timestamp
+    name = result.get("name", "unnamed")
+    filename = f"{name}.json"
+    path = os.path.join(folder, filename)
+
+    # Guardar en formato JSON legible
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=4, ensure_ascii=False)
+
+    return path
 
 
 if __name__ == "__main__":
@@ -66,16 +84,17 @@ if __name__ == "__main__":
     # Notar que hay 10 instancias medianas y 10 instancias pequeñas
     instances_str = get_instances_txt("instances")
 
+
     instances = []
     for instance_str in instances_str:
-        instances.append(parse_fjsp_instance(instance_str))
+        instances.append(parse_fjsp_instance(instance_str[1], instance_str[0]))
 
-    # for instance in instances:
-    #     print("NEW  INSTANCE")
-    #     pprint(instance["n_jobs"])
-    #     pprint(instance["n_machines"])
-    #     pprint(instance["jobs"])
+    for instance in instances:
+        pprint(f"INSTANCE: {instance['name']}")
+        pprint(instance["n_jobs"])
+        pprint(instance["n_machines"])
+        pprint(instance["jobs"])
 
-    print(instances[11]["jobs"][0][1][1])
+    #print(instances[11]["jobs"][0][1][1])
 
 
