@@ -1,4 +1,5 @@
 \ LP format - for model browsing. Use MPS format to capture full model detail.
+\ Signature: 0xa1556f69791938a5
 Minimize
   Cmax
 Subject To

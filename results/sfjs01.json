@@ -1,0 +1,33 @@
+{
+    "name": "sfjs01",
+    "n_jobs": 2,
+    "n_machines": 2,
+    "jobs": [
+        [
+            [
+                1
+            ],
+            [
+                1
+            ]
+        ],
+        [
+            [
+                0
+            ],
+            [
+                0
+            ]
+        ]
+    ],
+    "Cmax": 66.0,
+    "stats": {
+        "n_vars": 29,
+        "n_constraints": 36,
+        "runtime": 0.00800013542175293,
+        "status": 2,
+        "cota": 66.0,
+        "obj_value": 66.0,
+        "gap": 0.0
+    }
+}

@@ -122,7 +122,9 @@ def solve_fjsp(instance, env, time_limit=3600, mip_gap=0.0):
         "n_vars": model.NumVars,
         "n_constraints": model.NumConstrs,
         "runtime": model.Runtime,
-        "status": model.Status
+        "status": model.Status,
+        "cota" : model.ObjBound
+
     }
 
     # Si no hay solución (SolCount == 0), no intentar leer .X

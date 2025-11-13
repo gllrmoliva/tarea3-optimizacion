@@ -49,7 +49,7 @@ for instance in instances:
     # 5 segundos de time limit para probar nomas 
     result = solve_fjsp(instance = instance,
                         env = env,
-                        time_limit=5,
+                        time_limit=3600,
                         mip_gap=0.0)
     save_fjsp_result(result)
 
