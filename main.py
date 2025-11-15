@@ -7,8 +7,8 @@ from solver import solve_fjsp, create_env
 instances_str = get_instances_txt("instances")
 
 # transformamos en dos grupos para dividir la carga de cpu en distintos computadores
-batch1_names = ["mfjs01", "mfjs02", "mfjs03", "mfjs04", "mfjs05", "sfjs06", "sfjs07", "sfjs08", "sfjs09", "sfjs10"]
-batch2_names = ["sfjs01", "sfjs02", "sfjs03", "sfjs04", "sfjs05", "mfjs06", "mfjs07", "mfjs08", "mfjs09", "mfjs10"]
+batch1_names = ["sfjs01", "sfjs02", "sfjs03", "sfjs04", "sfjs05", "sfjs06", "sfjs07", "sfjs08", "sfjs09", "sfjs10"]
+batch2_names = ["mfjs01", "mfjs02", "mfjs03", "mfjs04", "mfjs05", "mfjs06", "mfjs07", "mfjs08", "mfjs09", "mfjs10"]
 
 batch1 = []
 batch2 = []
@@ -29,7 +29,7 @@ for instance_str in instances_str:
 env = create_env()
 
 # Eleccion de batch a utilizar
-batch_election = int(input("¿Que grupo de problemas quieres resolver, [1], [2] o [3]All? "))
+batch_election = int(input("¿Que grupo de problemas quieres resolver, [1]Small, [2]Medium o [3]All? "))
 instances = None
 
 if int(batch_election) == 1:
@@ -39,7 +39,7 @@ elif int(batch_election) == 2:
 elif batch_election == 3:
     instances = batch1 + batch2
 else:
-    print(f"ERROR en la elección: '{batch_number}'")
+    print(f"ERROR en la elección: {batch_election}")
     exit(0)
 
 t = Timer()

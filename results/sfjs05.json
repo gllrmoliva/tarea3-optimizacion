@@ -1,41 +1,14 @@
 {
     "name": "sfjs05",
-    "n_jobs": 3,
-    "n_machines": 2,
-    "jobs": [
-        [
-            [
-                1
-            ],
-            [
-                0
-            ]
-        ],
-        [
-            [
-                0
-            ],
-            [
-                1
-            ]
-        ],
-        [
-            [
-                0
-            ],
-            [
-                1
-            ]
-        ]
+    "problemsize": [
+        3,
+        2,
+        2
     ],
-    "Cmax": 119.0,
-    "stats": {
-        "n_vars": 55,
-        "n_constraints": 78,
-        "runtime": 0.12999987602233887,
-        "status": 2,
-        "cota": 119.0,
-        "obj_value": 119.0,
-        "gap": 0.0
-    }
+    "n_vars": 109,
+    "n_constraints": 196,
+    "cputime": 0.1680002212524414,
+    "cmax": 119.0,
+    "gap": 0.0,
+    "status": 2
 }

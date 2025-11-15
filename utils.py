@@ -4,16 +4,43 @@ import json
 import os
 import time
 
+
+# Fuente: https://realpython.com/python-timer/
+class TimerError(Exception):
+    """A custom exception used to report errors in use of Timer class"""
+
+
+# Fuente: https://realpython.com/python-timer/
+class Timer:
+    def __init__(self):
+        self._start_time = None
+
+    def start(self):
+        """Start a new timer"""
+        if self._start_time is not None:
+            raise TimerError(f"Timer is running. Use .stop() to stop it")
+
+        self._start_time = time.perf_counter()
+
+    def stop(self):
+        """Stop the timer, and report the elapsed time"""
+        if self._start_time is None:
+            raise TimerError(f"Timer is not running. Use .start() to start it")
+
+        elapsed_time = time.perf_counter() - self._start_time
+        self._start_time = None
+        print(f"Elapsed time: {elapsed_time:0.4f} seconds")
+
+
 def get_instances_txt(path_str: str):
     # obtener carpeta con instancias
     current_dir = Path.cwd()
     intances_folder =  current_dir / path_str
 
     # obtener instancias desde archivos .txt
-    # TODO: deberia guardar el nombre del archivo del que se obtiene instancia
-
     instances = [(file.stem, file.read_text(encoding="utf-8")) for file in intances_folder.glob("*.txt")]
     return instances
+
 
 def parse_fjsp_instance(instance_str: str, name_str: str):
     """
@@ -29,31 +56,54 @@ def parse_fjsp_instance(instance_str: str, name_str: str):
     lines = [line.strip() for line in instance_str.strip().splitlines() if line.strip()]
     
     # guadar primera linea
-    n_jobs, n_machines = map(int, lines[0].split())
-    
+    try:
+        n_jobs, n_machines = map(int, lines[0].split())
+    except (ValueError, IndexError) as e:
+        raise ValueError(f"Error al parsear cabecera (n_jobs, n_machines) en instancia '{name_str}': {e}")
+
     jobs = []
 
     # por cada linea que guarda un job
-    for line in lines[1:]:
+    for line_num, line in enumerate(lines[1:], start=2):
         tokens = line.split()
         idx = 0
-        
-        n_operations = int(tokens[idx]); idx += 1
-        job_data = []
-        
-        for _ in range(n_operations):
-            n_alt_machines = int(tokens[idx]); idx += 1
-            op_data = []
-            
-            for _ in range(n_alt_machines):
-                machine_id = int(tokens[idx]); idx += 1
-                proc_time = int(tokens[idx]); idx += 1
-                op_data.append((machine_id, proc_time))
-            
-            job_data.append(op_data)
-        
-        jobs.append(job_data)
-    
+
+        try:
+            n_operations = int(tokens[idx]); idx += 1
+            job_data = []
+
+            for _ in range(n_operations):
+                n_alt_machines = int(tokens[idx]); idx += 1
+                op_data = []
+
+                for _ in range(n_alt_machines):
+                    machine_id = int(tokens[idx]); idx += 1
+                    proc_time = int(tokens[idx]); idx += 1
+                    
+                    # Se comprueba que el machine_id esté en el rango [0, n_machines - 1].
+                    if not (0 <= machine_id < n_machines):
+                        raise ValueError(
+                            f"Error en instancia '{name_str}', línea {line_num}: "
+                            f"machine_id '{machine_id}' está fuera de rango [0, {n_machines - 1}]."
+                        )
+
+                    op_data.append((machine_id, proc_time))
+
+                job_data.append(op_data)
+
+            jobs.append(job_data)
+
+        except (IndexError, ValueError) as e:
+            # Captura tokens faltantes o conversiones int() fallidas en la línea
+            raise ValueError(f"Error parseando línea {line_num} en instancia '{name_str}': {e}")
+
+    # Validar que el número de jobs leídos coincida con la cabecera
+    if len(jobs) != n_jobs:
+        raise ValueError(
+            f"Error en instancia '{name_str}': "
+            f"Se esperaban {n_jobs} jobs (líneas) pero se encontraron {len(jobs)}."
+        )
+
     return {
             "name"      : name_str,
             "n_jobs"    : n_jobs,
@@ -78,36 +128,11 @@ def save_fjsp_result(result, folder="results"):
 
     return path
 
-# Fuente: https://realpython.com/python-timer/
-class TimerError(Exception):
-    """A custom exception used to report errors in use of Timer class"""
-
-# Fuente: https://realpython.com/python-timer/
-class Timer:
-    def __init__(self):
-        self._start_time = None
-
-    def start(self):
-        """Start a new timer"""
-        if self._start_time is not None:
-            raise TimerError(f"Timer is running. Use .stop() to stop it")
-
-        self._start_time = time.perf_counter()
-
-    def stop(self):
-        """Stop the timer, and report the elapsed time"""
-        if self._start_time is None:
-            raise TimerError(f"Timer is not running. Use .start() to start it")
-
-        elapsed_time = time.perf_counter() - self._start_time
-        self._start_time = None
-        print(f"Elapsed time: {elapsed_time:0.4f} seconds")
 
 if __name__ == "__main__":
 
     # Notar que hay 10 instancias medianas y 10 instancias pequeñas
     instances_str = get_instances_txt("instances")
-
 
     instances = []
     for instance_str in instances_str:
@@ -119,6 +144,4 @@ if __name__ == "__main__":
         pprint(instance["n_machines"])
         pprint(instance["jobs"])
 
-    #print(instances[11]["jobs"][0][1][1])
-
-
+    # print(instances[11]["jobs"][0][1][1])

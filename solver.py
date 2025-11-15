@@ -1,8 +1,8 @@
+import os
 import gurobipy as gp
 from gurobipy import GRB
-from utils import get_instances_txt, parse_fjsp_instance, save_fjsp_result
-import os
-from pathlib import Path
+from utils import get_instances_txt, parse_fjsp_instance
+
 
 def create_env():
     """
@@ -26,148 +26,135 @@ def create_env():
 
 def solve_fjsp(instance, env, time_limit=3600, mip_gap=0.0):
     """
-    Resuelve el Flexible Job Shop Scheduling Problem (FJSP) usando Gurobi.
+    Resuelve una instancia del Flexible Job Shop Problem (FJSP) usando Gurobi,
+    basado en la formulación MILP proporcionada.
     """
 
-
-    name = instance["name"]
-    save_path = str(Path.cwd() / "models" / str(name + ".lp"))
+    # --- Extracción de Datos y Parámetros ---
     n_jobs = instance["n_jobs"]
     n_machines = instance["n_machines"]
-    jobs = instance["jobs"]
+    jobs_data = instance["jobs"]
+    name = instance["name"]
 
-    # Big-M: suma de los mayores tiempos posibles (cota superior trivial para horizon)
-    L = sum(max(p for (_, p) in op) for job in jobs for op in job) * n_jobs + 1
+    # h_j: número de operaciones para cada trabajo j
+    h_j = [len(jobs_data[j]) for j in range(n_jobs)]
 
-    model = gp.Model(env=env)
-    model.Params.OutputFlag = 1
-    model.Params.TimeLimit = time_limit
-    model.Params.MIPGap = mip_gap
+    # K_max: Límite superior para el índice de prioridad 'k'.
+    K_max = sum(h_j)
 
-    # Variables
-    y = {}   # y[i,j,h] = 1 si la operación (j,h) se hace en máquina i
-    t = {}   # t[j,h]   = tiempo de inicio
-    Ps = {}  # Ps[j,h]  = duración de la operación seleccionada
-    Cmax = model.addVar(lb=0.0, name="Cmax")
+    # P[i, j, h]: Tiempo de procesamiento de op (j,h) en máquina i
+    # A[i, j, h]: 1 si máquina i es capaz de procesar op (j,h)
+    P = {}
+    A = {}
 
-    # Crear variables
+    # Se utiliza indexación desde 0 para j, h, e i internamente.
     for j in range(n_jobs):
-        for h, op in enumerate(jobs[j]):
-            t[(j, h)] = model.addVar(lb=0.0, name=f"t_{j}_{h}")
-            Ps[(j, h)] = model.addVar(lb=0.0, name=f"Ps_{j}_{h}")
-            for (i, p) in op:
-                y[(i, j, h)] = model.addVar(vtype=GRB.BINARY, name=f"y_{i}_{j}_{h}")
+        for h in range(h_j[j]):
+            # jobs_data[j][h] contiene tuplas (machine_id, proc_time)
+            for machine_id, proc_time in jobs_data[j][h]:
 
-    model.update()
+                # Se asume que machine_id ya esta indexado desde 0
+                i = machine_id
 
-    # Restricciones
-    for j in range(n_jobs):
-        for h, op in enumerate(jobs[j]):
-            # Cada operación se asigna a exactamente una máquina (entre las permitidas)
-            model.addConstr(gp.quicksum(y[(i, j, h)] for (i, _) in op) == 1,
-                            name=f"assign_{j}_{h}")
+                P[i, j, h] = proc_time
+                A[i, j, h] = 1
 
-            # Tiempo de procesamiento seleccionado (duración según la máquina escogida)
-            model.addConstr(
-                Ps[(j, h)] == gp.quicksum(p * y[(i, j, h)] for (i, p) in op),
-                name=f"proc_time_{j}_{h}"
-            )
+    # L: Un número grande (Big M)
+    # Si falla por alguna razon le ponemos un numero muuuuuy grande (1e9)
+    L = sum(max(P.get((i, j, h), 0) for i in range(n_machines))
+            for j in range(n_jobs) for h in range(h_j[j]))
+    if L == 0: L = 1e9
 
-        # Secuencia de operaciones dentro del mismo trabajo (predecesoras)
-        for h in range(len(jobs[j]) - 1):
-            model.addConstr(t[(j, h)] + Ps[(j, h)] <= t[(j, h + 1)],
-                            name=f"seq_{j}_{h}_to_{h+1}")
+    # --- Conjuntos de índices para variables dispersas ---
+    ops = [(j, h) for j in range(n_jobs) for h in range(h_j[j])]
+    valid_assignments = list(A.keys())
+    k_range = range(K_max)
+    valid_x_indices = [(i, j, h, k) for (i, j, h) in valid_assignments for k in k_range]
 
-    # Restricciones de no solapamiento entre operaciones en la misma máquina
-    # Para cada máquina, tomar pares de operaciones que pueden usar esa máquina
-    for i in range(n_machines):
-        # ops_i: lista de tuplas (j, h) de operaciones que pueden ejecutarse en i
-        ops_i = [(j, h) for j in range(n_jobs) for h, op in enumerate(jobs[j]) for (mach, _) in op if mach == i]
+    # --- Inicialización del Modelo ---
+    model = gp.Model(f"FJSP_{name}", env=env)
+    model.setParam("TimeLimit", time_limit)
+    model.setParam("MIPGap", mip_gap)
 
-        # Para cada par (ordenado) creamos una variable binaria z que decide precedencia
-        for idx1 in range(len(ops_i)):
-            for idx2 in range(idx1 + 1, len(ops_i)):
-                j1, h1 = ops_i[idx1]
-                j2, h2 = ops_i[idx2]
+    # --- Definición de Variables de Decisión ---
+    Cmax = model.addVar(vtype=GRB.CONTINUOUS, name="Cmax")
+    y = model.addVars(valid_assignments, vtype=GRB.BINARY, name="y")
+    x = model.addVars(valid_x_indices, vtype=GRB.BINARY, name="x")
+    t = model.addVars(ops, vtype=GRB.CONTINUOUS, name="t")
+    T_m = model.addVars(n_machines, k_range, vtype=GRB.CONTINUOUS, name="Tm")
+    Ps = model.addVars(ops, vtype=GRB.CONTINUOUS, name="Ps")
 
-                z = model.addVar(vtype=GRB.BINARY, name=f"z_{i}_{j1}_{h1}_{j2}_{h2}")
-
-                # Si ambas operaciones están en la máquina i (y[i,j1,h1]=1 y y[i,j2,h2]=1),
-                # entonces z decide el orden. Si alguna no está, las desigualdades se relajan.
-                # Orden: op1 antes op2 cuando z=1
-                model.addConstr(
-                    t[(j1, h1)] + Ps[(j1, h1)] <= t[(j2, h2)] + L * (1 - z) + L * (2 - y[(i, j1, h1)] - y[(i, j2, h2)]),
-                    name=f"no_overlap1_{i}_{j1}_{h1}_{j2}_{h2}"
-                )
-
-                # Orden: op2 antes op1 cuando z=0
-                model.addConstr(
-                    t[(j2, h2)] + Ps[(j2, h2)] <= t[(j1, h1)] + L * z + L * (2 - y[(i, j1, h1)] - y[(i, j2, h2)]),
-                    name=f"no_overlap2_{i}_{j1}_{h1}_{j2}_{h2}"
-                )
-
-    # Makespan
-    for j in range(n_jobs):
-        last = len(jobs[j]) - 1
-        model.addConstr(Cmax >= t[(j, last)] + Ps[(j, last)], name=f"cmax_job_{j}")
-
+    # --- Función Objetivo ---
     model.setObjective(Cmax, GRB.MINIMIZE)
 
-    # Optimizar
-    print("Iniciando optimización...")
+    # --- Definición de Restricciones ---
+    
+    # (1) Cmax >= t_j,hj + Ps_j,hj
+    model.addConstrs((Cmax >= t[j, h_j[j]-1] + Ps[j, h_j[j]-1] for j in range(n_jobs)), 
+                     name="C1_Makespan")
+
+    # (2) sum(i, y_i,j,h * p_i,j,h) = Ps_j,h
+    model.addConstrs((gp.quicksum(y[i, j, h] * P[i, j, h] for i in range(n_machines) if (i, j, h) in A) == Ps[j, h] 
+                      for j, h in ops), 
+                     name="C2_ProcTime")
+
+    # (3) t_j,h + Ps_j,h <= t_j,h+1
+    model.addConstrs((t[j, h] + Ps[j, h] <= t[j, h+1] 
+                      for j in range(n_jobs) for h in range(h_j[j]-1)), 
+                     name="C3_JobSequence")
+
+    # (4) Tm_i,k + sum(j,h, Ps_j,h * x_i,j,h,k) <= Tm_i,k+1
+    model.addConstrs((T_m[i, k] + gp.quicksum(x[i, j, h, k] * P[i, j, h] for j, h in ops if (i, j, h) in A) <= T_m[i, k+1] 
+                      for i in range(n_machines) for k in range(K_max - 1)), 
+                     name="C4_MachineSequence")
+
+    # (5) Tm_i,k <= t_j,h + (1 - x_i,j,h,k) * L
+    # (6) Tm_i,k >= t_j,h - (1 - x_i,j,h,k) * L
+    model.addConstrs((T_m[i, k] <= t[j, h] + L * (1 - x[i, j, h, k]) 
+                      for i, j, h, k in valid_x_indices), 
+                     name="C5_StartTimeLink_Upper")
+    
+    model.addConstrs((T_m[i, k] >= t[j, h] - L * (1 - x[i, j, h, k]) 
+                      for i, j, h, k in valid_x_indices), 
+                     name="C6_StartTimeLink_Lower")
+
+    # (7) y_i,j,h <= a_i,j,h (Implícita)
+
+    # (8) sum(j,h, x_i,j,h,k) <= 1
+    model.addConstrs((gp.quicksum(x[i, j, h, k] for j, h in ops if (i, j, h) in A) <= 1 
+                      for i in range(n_machines) for k in k_range), 
+                     name="C8_MachineSlot")
+
+    # (9) sum(i, y_i,j,h) = 1
+    model.addConstrs((y.sum('*', j, h) == 1 
+                      for j, h in ops), 
+                     name="C9_OpAssignment")
+
+    # (10) sum(k, x_i,j,h,k) = y_i,j,h
+    model.addConstrs((x.sum(i, j, h, '*') == y[i, j, h] 
+                      for i, j, h in valid_assignments), 
+                     name="C10_AssignmentLink")
+
+    # --- Optimización ---
     model.optimize()
 
-    # Preparar estadísticas básicas
-    stats = {
-        "n_vars": model.NumVars,
-        "n_constraints": model.NumConstrs,
-        "runtime": model.Runtime,
-        "status": model.Status,
-        "cota" : model.ObjBound
+    # --- Recolección de Estadísticas ---
+    gap = None
+    if model.Status in [GRB.OPTIMAL, GRB.SUBOPTIMAL]:
+        if model.MIPGap < 1e100:
+            gap = model.MIPGap
 
-    }
-
-    # Si no hay solución (SolCount == 0), no intentar leer .X
-    if model.SolCount == 0:
-        # Si el modelo fue declarado infactible, podemos devolver información mínima
-        # y recomendar inspección (computeIIS fuera de esta función).
-        stats["obj_value"] = None
-        stats["gap"] = None
-        result_jobs = None
-        cmax_val = None
-    else:
-        # Extraer solución actual (mejor encontrada)
-        result_jobs = []
-        for j in range(n_jobs):
-            job_result = []
-            for h, op in enumerate(jobs[j]):
-                selected_machine = None
-                for (i, _) in op:
-                    # Leer el valor de la variable binaria (existe porque SolCount > 0)
-                    if y[(i, j, h)].X > 0.5:
-                        selected_machine = i
-                        break
-                job_result.append([selected_machine])
-            result_jobs.append(job_result)
-
-        cmax_val = Cmax.X
-        stats["obj_value"] = model.ObjVal
-        # model.MIPGap es válido; si no está definido, poner None
-        try:
-            stats["gap"] = model.MIPGap
-        except Exception:
-            stats["gap"] = None
-
-    model.write(save_path)
-    print(f"El modelo se ha guardado correctamente en {save_path}")
+    cmax_val = Cmax.X if model.SolCount > 0 else None
 
     return {
-        "name"       : name,
-        "n_jobs"     : n_jobs,
-        "n_machines" : n_machines,
-        "jobs"       : result_jobs,
-        "Cmax"       : cmax_val,
-        "stats"      : stats
+        "name": name,
+        "problemsize":(n_jobs, max(h_j), n_machines),
+        "n_vars": model.NumVars,
+        "n_constraints": model.NumConstrs,
+        "cputime": model.Runtime,
+        "cmax": cmax_val,
+        "gap": gap,
+        "status": model.Status
     }
 
 
@@ -181,10 +168,8 @@ if __name__ == "__main__":
     env = create_env()
 
     for instance in instances:
-        # 5 segundos de time limit para probar nomas 
-        result = solve_fjsp(instance = instance,
-                            env = env,
-                            time_limit=5,
+        # 5 segundos de time limit para probar nomas
+        result = solve_fjsp(instance=instance,
+                            env=env,
+                            time_limit=3,
                             mip_gap=0.0)
-
-    pass

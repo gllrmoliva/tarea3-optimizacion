@@ -1,50 +1,14 @@
 {
     "name": "sfjs09",
-    "n_jobs": 3,
-    "n_machines": 3,
-    "jobs": [
-        [
-            [
-                1
-            ],
-            [
-                0
-            ],
-            [
-                2
-            ]
-        ],
-        [
-            [
-                2
-            ],
-            [
-                0
-            ],
-            [
-                2
-            ]
-        ],
-        [
-            [
-                0
-            ],
-            [
-                1
-            ],
-            [
-                1
-            ]
-        ]
+    "problemsize": [
+        3,
+        3,
+        3
     ],
-    "Cmax": 210.0,
-    "stats": {
-        "n_vars": 85,
-        "n_constraints": 123,
-        "runtime": 0.01399993896484375,
-        "status": 2,
-        "cota": 210.0,
-        "obj_value": 210.0,
-        "gap": 0.0
-    }
+    "n_vars": 226,
+    "n_constraints": 420,
+    "cputime": 0.014999866485595703,
+    "cmax": 210.0,
+    "gap": 0.0,
+    "status": 2
 }
