@@ -1,0 +1,14 @@
+{
+    "name": "mfjs04",
+    "problemsize": [
+        7,
+        3,
+        7
+    ],
+    "n_vars": 1422,
+    "n_constraints": 2758,
+    "cputime": 3600.3239998817444,
+    "cmax": 553.9999420554356,
+    "gap": null,
+    "status": 9
+}

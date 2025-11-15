@@ -7,7 +7,7 @@
     ],
     "n_vars": 95,
     "n_constraints": 170,
-    "cputime": 0.0820000171661377,
+    "cputime": 0.07299995422363281,
     "cmax": 355.0,
     "gap": 0.0,
     "status": 2
