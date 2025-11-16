@@ -1,9 +1,8 @@
 from pathlib import Path
-from pprint import pprint
 import json
 import os
 import time
-
+import pandas as pd
 
 # Fuente: https://realpython.com/python-timer/
 class TimerError(Exception):
@@ -129,19 +128,45 @@ def save_fjsp_result(result, folder="results"):
     return path
 
 
+def results_to_table(path_str: str = "results"):
+    current_dir = Path.cwd()
+    instances_folder = current_dir / path_str
+
+    # cargar resultados desde .txt
+    results = []
+    for file in instances_folder.glob("*.json"):
+        try:
+            data = json.loads(file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        results.append(data)
+
+    if not results:
+        raise ValueError("No se encontraron archivos .txt válidos en la carpeta.")
+
+    # construir filas verificando cada campo
+    rows = []
+    required_fields = [
+        "name", "problemsize", "n_vars", "n_constraints",
+        "cputime", "cmax", "gap", "status"
+    ]
+
+    for r in results:
+        row = {}
+        for f in required_fields:
+            row[f] = r.get(f, None)
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+
+    # guardar CSV
+    output_path = instances_folder / "results.csv"
+    df.to_csv(output_path, index=False)
+
+    return output_path
+
+
 if __name__ == "__main__":
 
-    # Notar que hay 10 instancias medianas y 10 instancias pequeñas
-    instances_str = get_instances_txt("instances")
+    results_to_table()
 
-    instances = []
-    for instance_str in instances_str:
-        instances.append(parse_fjsp_instance(instance_str[1], instance_str[0]))
-
-    for instance in instances:
-        pprint(f"INSTANCE: {instance['name']}")
-        pprint(instance["n_jobs"])
-        pprint(instance["n_machines"])
-        pprint(instance["jobs"])
-
-    # print(instances[11]["jobs"][0][1][1])
