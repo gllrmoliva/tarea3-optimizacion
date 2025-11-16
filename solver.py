@@ -139,10 +139,7 @@ def solve_fjsp(instance, env, time_limit=3600, mip_gap=0.0):
     model.optimize()
 
     # --- Recolección de Estadísticas ---
-    gap = None
-    if model.Status in [GRB.OPTIMAL, GRB.SUBOPTIMAL]:
-        if model.MIPGap < 1e100:
-            gap = model.MIPGap
+    gap = model.MIPGap
 
     cmax_val = Cmax.X if model.SolCount > 0 else None
 
